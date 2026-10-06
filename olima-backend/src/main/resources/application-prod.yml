@@ -1,0 +1,6 @@
+# Prod profili (Docker image'da sukut). Maxfiy qiymatlar faqat env orqali; sukut yo'q.
+# Bu fayl mavjudligining o'zi "local" dev qiymatlari prod'ga tushmasligini kafolatlaydi:
+# spring.profiles.default=local faqat hech qanday profil berilmaganda ishlaydi.
+logging:
+  level:
+    com.olima: ${LOG_LEVEL_APP:INFO}

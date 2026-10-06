@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <include file="db/changelog/001-organizations.xml"/>
+    <include file="db/changelog/002-tools.xml"/>
+    <include file="db/changelog/003-conversations.xml"/>
+    <include file="db/changelog/004-executions.xml"/>
+    <include file="db/changelog/005-knowledge.xml"/>
+    <include file="db/changelog/006-complaints.xml"/>
+    <include file="db/changelog/008-document-upload.xml"/>
+    <include file="db/changelog/010-users.xml"/>
+    <include file="db/changelog/012-widget-key.xml"/>
+    <include file="db/changelog/013-widget-greeting.xml"/>
+    <include file="db/changelog/013-telegram.xml"/>
+    <include file="db/changelog/015-pgvector.xml"/>
+    <include file="db/changelog/016-conversation-access-and-tool-delete.xml"/>
+    <include file="db/changelog/017-organization-web-search.xml"/>
+    <include file="db/changelog/018-platform-hardening.xml"/>
+    <include file="db/changelog/019-integration-connections.xml"/>
+    <include file="db/changelog/020-token-billing.xml"/>
+
+</databaseChangeLog>

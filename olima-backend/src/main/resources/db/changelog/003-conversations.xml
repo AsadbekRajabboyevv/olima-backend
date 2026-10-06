@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="003-create-conversations" author="olima">
+        <createTable tableName="conversations">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="organization_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="title" type="VARCHAR(500)"/>
+            <column name="created_at" type="TIMESTAMP WITH TIME ZONE" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP WITH TIME ZONE" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="access_token_hash" type="VARCHAR(64)"/>
+
+        </createTable>
+
+        <addForeignKeyConstraint baseTableName="conversations" baseColumnNames="organization_id"
+                                 referencedTableName="organizations" referencedColumnNames="id"
+                                 constraintName="fk_conversations_organization"/>
+
+        <createIndex tableName="conversations" indexName="idx_conversations_organization_id">
+            <column name="organization_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="003-create-messages" author="olima">
+        <createTable tableName="messages">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="conversation_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="role" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="content" type="TEXT"/>
+            <column name="tool_call_id" type="VARCHAR(255)"/>
+            <column name="tool_name" type="VARCHAR(255)"/>
+            <column name="metadata" type="JSONB"/>
+            <column name="created_at" type="TIMESTAMP WITH TIME ZONE" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint baseTableName="messages" baseColumnNames="conversation_id"
+                                 referencedTableName="conversations" referencedColumnNames="id"
+                                 constraintName="fk_messages_conversation"
+                                 onDelete="CASCADE"/>
+
+        <createIndex tableName="messages" indexName="idx_messages_conversation_id">
+            <column name="conversation_id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

@@ -1,0 +1,83 @@
+# OLIMA AI — backend (API + pgvector Postgres)
+#
+# Serverda:  cd /opt/olima/backend && docker compose up -d --build
+# Sozlamalar shu papkadagi .env da (git'ga tushmaydi, namuna: .env.example).
+#
+# Tashqariga hech qanday port chiqmaydi. Frontend konteyneri (olima-web)
+# "olima_net" tarmog'i orqali olima-api:8080 ga murojaat qiladi.
+
+name: olima-backend
+
+services:
+  olima-postgres:
+    image: pgvector/pgvector:pg18
+    container_name: olima-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: olima
+    volumes:
+      - olima-pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d olima"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+    networks: [olima]
+
+  olima-api:
+    image: olima/api:latest
+    build: .
+    container_name: olima-api
+    restart: unless-stopped
+    environment:
+      DB_HOST: olima-postgres
+      DB_PORT: 5432
+      DB_NAME: olima
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      OPENAI_FALLBACK_MODEL: ${OPENAI_FALLBACK_MODEL:-}
+      TAVILY_API_KEY: ${TAVILY_API_KEY:-}
+      SERPAPI_API_KEY: ${SERPAPI_API_KEY:-}
+      GOOGLE_SEARCH_API_KEY: ${GOOGLE_SEARCH_API_KEY:-}
+      GOOGLE_SEARCH_CX: ${GOOGLE_SEARCH_CX:-}
+      # Maxfiy qiymatlar majburiy: berilmasa compose to'xtaydi (":?"), ilova ham fail-fast
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY is required (openssl rand -base64 32)}
+      SUPER_ADMIN_USERNAME: ${SUPER_ADMIN_USERNAME:-super}
+      # Faqat birinchi ishga tushishda (SUPER_ADMIN yo'q bo'lsa) ishlatiladi
+      SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD:-}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL}
+      DOCUMENT_STORAGE_PATH: /data/documents
+      DEFAULT_MONTHLY_TOKEN_QUOTA: ${DEFAULT_MONTHLY_TOKEN_QUOTA:--1}
+      LLM_MAX_CONCURRENT: ${LLM_MAX_CONCURRENT:-20}
+      LOG_FORMAT: ${LOG_FORMAT:-ecs}
+      API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=70 -Xss512k"
+    volumes:
+      # Yuklangan hujjatlarning asl nusxalari — qayta indekslash uchun kerak
+      - olima-documents:/data/documents
+    depends_on:
+      olima-postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 1100M
+    networks: [olima]
+
+volumes:
+  olima-pgdata:
+  olima-documents:
+
+networks:
+  olima:
+    name: olima_net

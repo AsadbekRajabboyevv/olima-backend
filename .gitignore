@@ -1,0 +1,10 @@
+target/
+!**/src/main/**/target/
+!**/src/test/**/target/
+.idea
+*.iml
+.vscode/
+.env
+*.log
+/data/
+olima-backend/data/

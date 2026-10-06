@@ -1,0 +1,43 @@
+# ==============================================================================
+# FAQAT LOKAL ISHLAB CHIQISH UCHUN (SPRING_PROFILES_ACTIVE=local).
+# Bu qiymatlar ochiq — prod'da bu profil hech qachon yoqilmasin.
+# ==============================================================================
+spring:
+  datasource:
+    # Avvalgi lokal sukut qiymatlari (docker-compose o'zinikini env orqali beradi)
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:1234}
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+
+management:
+  server:
+    port: ${MANAGEMENT_PORT:8081}
+
+app:
+  security:
+    jwt:
+      secret: ${JWT_SECRET:local-dev-only-jwt-secret-change-me-0123456789abcdef-0123456789abcdef}
+    # 32 bayt, Base64 — faqat lokal
+    encryption-key: ${ENCRYPTION_KEY:bG9jYWwtZGV2LW9ubHktZW5jcnlwdGlvbi1rZXktMzI=}
+    refresh:
+      cookie-secure: false
+    password:
+      min-length: 6
+    bootstrap-admin:
+      password: ${SUPER_ADMIN_PASSWORD:local12345}
+    cors:
+      allowed-origin-patterns: ${CORS_ORIGINS:http://localhost:*,http://127.0.0.1:*}
+  http:
+    outbound:
+      # Lokal mock API'lar (localhost) bilan ishlash uchun
+      allow-private-networks: ${OUTBOUND_ALLOW_PRIVATE:true}
+
+logging:
+  level:
+    com.olima: DEBUG
+    org.springframework.ai: INFO

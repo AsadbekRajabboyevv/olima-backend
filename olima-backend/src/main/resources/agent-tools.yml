@@ -1,0 +1,74 @@
+# Agent vositalari: modelga beriladigan tavsiflar, ichki xabarlar va foydalanuvchiga
+# ko'rinadigan yorliqlar. Kodni o'zgartirmasdan shu yerda tahrirlanadi; har qanday qiymatni
+# env orqali ham almashtirish mumkin (masalan APP_AGENT_TOOLS_WEB_SEARCH_ENABLED=false).
+#
+# {org} — tashkilot nomi bilan almashtiriladi.
+# Modelga boradigan matnlar (description, *-message, next-step) ingliz tilida;
+# foydalanuvchiga ko'rinadiganlar (source-labels, tool-call-status) o'zbekcha.
+app:
+  agent:
+    tools:
+      tool-call-preview-chars: 300
+
+      knowledge:
+        max-results: 5
+        description: >-
+          Semantic search in {org}'s internal documents (regulations, decrees, prices, procedures).
+          Pass a focused search query in user's language.
+        query-description: What to look for in {org}'s documents
+        empty-result-message: No relevant document was found in the internal knowledge base for this query.
+
+      web-search:
+        # PLATFORMA darajasidagi ruxsat. Har bir tashkilot o'zi panelda yoqadi
+        # (organizations.web_search_enabled, sukut bo'yicha o'chiq). false bo'lsa hech kim yoqa olmaydi.
+        # fetch-page ham faqat internet qidiruvi yoqilgan tashkilotga beriladi.
+        enabled: true
+        description: >-
+          Search the public web strictly for public news/announcements about {org} when internal sources lack the answer.
+        query-description: Search query about {org}'s domain
+
+      fetch-page:
+        enabled: true
+        description: >-
+          Fetch full text of a public web page from search_internet results.
+        url-description: Absolute public http(s) URL from web search results
+        blocked-message: Only public http(s) pages can be fetched.
+
+      complaint:
+        default-subject: Murojaat
+        default-category: OTHER
+        draft-created-message: >-
+          The complaint draft was created but has NOT been sent yet.
+          Tell the user they must press the confirm button to submit it.
+        tool-call-status: Qoralama yaratildi, tasdiqlash kutilmoqda
+
+      messages:
+        tool-failed: The tool failed to execute.
+        no-data: No data was found.
+        # Tashkilot vositasi bo'sh qaytganda modelga ko'rsatma — internet ruxsatiga qarab
+        next-step-with-web-search: >-
+          Continue with next tool (search_knowledge_base, then search_internet) before answering.
+        next-step-internal-only: >-
+          Try search_knowledge_base. If nothing found, state that info is unavailable.
+
+      # Tizim promptidagi {{sourcePolicy}} bo'limi — tashkilot sozlamasiga qarab bittasi qo'yiladi
+      source-policy:
+        with-web-search: |-
+          ## Tool priority:
+          1. **Organization tools**: for operations and personal records (grades, contracts, balances).
+          2. **`search_knowledge_base`**: {org}'s uploaded documents (primary domain source).
+          3. **`search_internet` / `fetch_web_page`**: only for public {org} news if internal tools return nothing.
+          Prefer internal documents over web results. If all return nothing, state that information is unavailable.
+        internal-only: |-
+          ## Sources (internal only):
+          You have NO internet access for {org}. Your only sources are:
+          1. **Organization tools**: for operations and personal records.
+          2. **`search_knowledge_base`**: {org}'s uploaded documents (primary source).
+          If nothing found, state that info is unavailable in {org}'s materials.
+
+      source-labels:
+        # Hujjatning o'z nomi bo'lmasa javob ostida shunday ko'rinadi
+        organization-document: "{org} rasmiy hujjati"
+        generic-document: Rasmiy hujjat
+        # Fayl nomi shulardan biri bo'lsa, u sarlavha sifatida ishlatilmaydi
+        generic-titles: [document, doc, file, fayl, hujjat, data]

@@ -1,0 +1,239 @@
+# ==============================================================================
+# OLIMA backend sozlamalari.
+#
+# Maxfiy qiymatlar (JWT_SECRET, ENCRYPTION_KEY, DB_PASSWORD, OPENAI_API_KEY) uchun bu yerda
+# SUKUT YO'Q — prod'da berilmasa ilova ishga tushmaydi (fail-fast). Lokal ishlab chiqish uchun
+# qiymatlar application-local.yml da: SPRING_PROFILES_ACTIVE=local.
+# ==============================================================================
+spring:
+  application:
+    name: olima-backend
+  profiles:
+    # Profil ko'rsatilmasa (IDE'dan ishga tushirish) — lokal dev qiymatlari.
+    # Docker image SPRING_PROFILES_ACTIVE=prod bilan keladi, u yerda bu sukut ishlamaydi.
+    default: local
+  config:
+    # Agent vositalarining matnlari va sozlamalari (app.agent.tools.*)
+    import: classpath:agent-tools.yml
+  autoconfigure:
+    # Autentifikatsiya JWT orqali; Spring'ning standart in-memory foydalanuvchisi kerak emas
+    exclude: org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:olima}
+    username: ${DB_USERNAME:olima}
+    password: ${DB_PASSWORD:}
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:20}
+      connection-timeout: ${DB_CONNECTION_TIMEOUT:10000}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.xml
+  servlet:
+    multipart:
+      max-file-size: ${UPLOAD_MAX_FILE_SIZE:25MB}
+      max-request-size: ${UPLOAD_MAX_FILE_SIZE:25MB}
+  cache:
+    type: caffeine
+    cache-names: enabledTools
+    caffeine:
+      spec: ${CACHE_SPEC:maximumSize=5000,expireAfterWrite=5m}
+  threads:
+    virtual:
+      enabled: true
+  ai:
+    openai:
+      api-key: ${OPENAI_API_KEY:}
+      chat:
+        options:
+          model: ${OPENAI_MODEL:gpt-4o-mini}
+          temperature: ${OPENAI_TEMPERATURE:0.3}
+          # Javob uzunligi (va narxi) chegarasi
+          max-completion-tokens: ${OPENAI_MAX_COMPLETION_TOKENS:1500}
+      embedding:
+        options:
+          model: ${OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
+    retry:
+      max-attempts: ${OPENAI_RETRY_MAX_ATTEMPTS:3}
+      backoff:
+        initial-interval: ${OPENAI_RETRY_INITIAL_INTERVAL:1s}
+        multiplier: 2
+        max-interval: ${OPENAI_RETRY_MAX_INTERVAL:10s}
+
+server:
+  port: ${SERVER_PORT:8080}
+  # nginx/Caddy ortida: mijoz IP (rate limit, audit) X-Forwarded-For dan olinadi.
+  # Tomcat faqat ichki tarmoqdagi proksilarga ishonadi.
+  forward-headers-strategy: native
+  shutdown: graceful
+  error:
+    include-message: never
+    include-stacktrace: never
+
+springdoc:
+  api-docs:
+    enabled: ${API_DOCS_ENABLED:false}
+  swagger-ui:
+    enabled: ${API_DOCS_ENABLED:false}
+
+management:
+  server:
+    # Metrikalar alohida portda — tashqariga chiqarilmaydi (Prometheus ichki tarmoqdan oladi)
+    port: ${MANAGEMENT_PORT:8081}
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+  metrics:
+    tags:
+      application: olima-backend
+
+app:
+  # Telegram webhook manzili shu asosda quriladi: {public-base-url}/api/v1/telegram/webhook/{secret}
+  public-base-url: ${PUBLIC_BASE_URL:http://localhost:8080}
+
+  security:
+    jwt:
+      secret: ${JWT_SECRET:}
+      access-token-ttl: ${JWT_ACCESS_TTL:15m}
+    refresh:
+      ttl: ${JWT_REFRESH_TTL:14d}
+      cookie-secure: ${REFRESH_COOKIE_SECURE:true}
+    # Bo'sh bo'lsa ilova aniq xabar bilan to'xtaydi (fail-fast)
+    encryption-key: ${ENCRYPTION_KEY:}
+    session-cache-ttl: ${SESSION_CACHE_TTL:30s}
+    login:
+      max-failures: ${LOGIN_MAX_FAILURES:5}
+      lock-duration: ${LOGIN_LOCK_DURATION:15m}
+    password:
+      min-length: ${PASSWORD_MIN_LENGTH:10}
+    bootstrap-admin:
+      username: ${SUPER_ADMIN_USERNAME:super}
+      password: ${SUPER_ADMIN_PASSWORD:}
+    cors:
+      # Vergul bilan ajratilgan origin naqshlari
+      allowed-origin-patterns: ${CORS_ORIGINS:}
+
+  rate-limit:
+    enabled: ${RATE_LIMIT_ENABLED:true}
+    rules:
+      - name: chat-ip
+        paths: [/api/v1/chat, /api/v1/chat/stream, /api/v1/chat/confirm]
+        methods: [POST]
+        key: IP
+        capacity: ${RATE_LIMIT_CHAT_PER_IP:20}
+        period: 1m
+      - name: chat-organization
+        paths: [/api/v1/chat, /api/v1/chat/stream, /api/v1/chat/confirm]
+        methods: [POST]
+        key: ORGANIZATION
+        capacity: ${RATE_LIMIT_CHAT_PER_ORG:600}
+        period: 1m
+      - name: login-ip
+        paths: [/api/v1/auth/login]
+        methods: [POST]
+        key: IP
+        capacity: ${RATE_LIMIT_LOGIN_PER_IP:10}
+        period: 5m
+      - name: refresh-ip
+        paths: [/api/v1/auth/refresh]
+        methods: [POST]
+        key: IP
+        capacity: 60
+        period: 5m
+      - name: document-upload
+        paths: [/api/v1/knowledge/bases/*/documents, /api/v1/knowledge/bases/*/documents/**]
+        methods: [POST]
+        key: USER
+        capacity: ${RATE_LIMIT_UPLOADS_PER_USER:60}
+        period: 1h
+
+  quota:
+    # Tashkilot o'z kvotasini bermasa; -1 — cheklovsiz
+    default-monthly-tokens: ${DEFAULT_MONTHLY_TOKEN_QUOTA:-1}
+    zone: ${APP_TIMEZONE:Asia/Tashkent}
+
+  agent:
+    max-concurrent-requests: ${LLM_MAX_CONCURRENT:20}
+    acquire-timeout: ${LLM_ACQUIRE_TIMEOUT:3s}
+    stream-timeout: ${LLM_STREAM_TIMEOUT:3m}
+    fallback-model: ${OPENAI_FALLBACK_MODEL:}
+
+  http:
+    connect-timeout: ${HTTP_CONNECT_TIMEOUT:5s}
+    read-timeout: ${HTTP_READ_TIMEOUT:20s}
+    max-response-size: ${HTTP_MAX_RESPONSE_SIZE:2MB}
+    outbound:
+      # Faqat lokal ishlab chiqish uchun (mock API localhost'da). Prod'da HECH QACHON true emas
+      allow-private-networks: ${OUTBOUND_ALLOW_PRIVATE:false}
+      # Ichki bo'lsa ham ruxsat etilgan ishonchli hostlar, vergul bilan: api.internal.uz,*.corp.uz
+      allowed-hosts: ${OUTBOUND_ALLOWED_HOSTS:}
+      blocked-hosts: ${OUTBOUND_BLOCKED_HOSTS:}
+
+  # Tashqi tizim ulanishlari (/api/v1/organizations/{id}/connections)
+  integration:
+    # Login javobida muddat (expires_in) bo'lmasa token qancha keshlanadi
+    default-token-ttl: ${INTEGRATION_TOKEN_TTL:30m}
+    # Muddat tugashidan shuncha oldin yangilanadi
+    token-refresh-skew: ${INTEGRATION_TOKEN_SKEW:60s}
+    login-timeout: ${INTEGRATION_LOGIN_TIMEOUT:15s}
+
+  tools:
+    rest-api:
+      default-timeout: ${TOOL_DEFAULT_TIMEOUT:15s}
+      max-timeout: ${TOOL_MAX_TIMEOUT:30s}
+      max-response-size: ${TOOL_MAX_RESPONSE_SIZE:512KB}
+      max-response-chars: ${TOOL_MAX_RESPONSE_CHARS:16000}
+
+  knowledge:
+    storage:
+      path: ${DOCUMENT_STORAGE_PATH:./data/documents}
+    ingestion:
+      max-download-size: ${UPLOAD_MAX_FILE_SIZE:25MB}
+      max-extracted-chars: ${INGEST_MAX_EXTRACTED_CHARS:5000000}
+      parse-timeout: ${INGEST_PARSE_TIMEOUT:2m}
+      worker:
+        poll-interval: ${INGEST_POLL_INTERVAL:5s}
+        concurrency: ${INGEST_CONCURRENCY:2}
+        max-attempts: ${INGEST_MAX_ATTEMPTS:3}
+    chunking:
+      size: ${CHUNK_SIZE:1500}
+      overlap: ${CHUNK_OVERLAP:150}
+    embedding:
+      # document_chunks.embedding ustuni o'lchami (015-pgvector.xml). Model almashsa migratsiya ham kerak
+      dimensions: ${RAG_EMBEDDING_DIMENSIONS:1536}
+    search:
+      # Kosinus o'xshashligi chegarasi: aloqasiz javob ko'p bo'lsa oshiring, "topilmadi" ko'p bo'lsa kamaytiring
+      min-similarity: ${RAG_MIN_SIMILARITY:0.25}
+      rrf-k: ${RAG_RRF_K:60}
+
+  search:
+    # Internet qidiruvi provayderlari tartibi: kaliti bor birinchisi ishlatiladi, natija bo'lmasa keyingisi
+    providers: ${SEARCH_PROVIDERS:google,tavily,serpapi,duckduckgo,wikipedia}
+    max-results: ${SEARCH_MAX_RESULTS:5}
+    tavily:
+      api-key: ${TAVILY_API_KEY:}
+    serpapi:
+      api-key: ${SERPAPI_API_KEY:}
+    google:
+      api-key: ${GOOGLE_SEARCH_API_KEY:}
+      cx: ${GOOGLE_SEARCH_CX:}
+
+logging:
+  level:
+    root: ${LOG_LEVEL_ROOT:INFO}
+    com.olima: ${LOG_LEVEL_APP:INFO}
+    org.springframework.ai: ${LOG_LEVEL_AI:WARN}
+  # Prod'da JSON log (LOG_FORMAT=ecs yoki logstash) — log tizimi maydonlarni o'zi ajratadi
+  structured:
+    format:
+      console: ${LOG_FORMAT:}
+  pattern:
+    correlation: "[%X{requestId:-}] [org=%X{orgId:-}] [user=%X{userId:-}] "

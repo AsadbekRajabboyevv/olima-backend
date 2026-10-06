@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="015-enable-pgvector-extension" author="olima">
+        <preConditions onFail="CONTINUE" onError="CONTINUE">
+            <sqlCheck expectedResult="1">SELECT COUNT(*) FROM pg_available_extensions WHERE name = 'vector'</sqlCheck>
+        </preConditions>
+        <sql>
+            CREATE EXTENSION IF NOT EXISTS vector;
+        </sql>
+    </changeSet>
+
+    <changeSet id="015-add-embedding-column-to-chunks" author="olima">
+        <preConditions onFail="CONTINUE" onError="CONTINUE">
+            <sqlCheck expectedResult="1">SELECT COUNT(*) FROM pg_extension WHERE extname = 'vector'</sqlCheck>
+        </preConditions>
+        <sql>
+            ALTER TABLE document_chunks ADD COLUMN IF NOT EXISTS embedding vector(1536);
+        </sql>
+    </changeSet>
+
+    <changeSet id="015-create-hnsw-embedding-index" author="olima">
+        <preConditions onFail="CONTINUE" onError="CONTINUE">
+            <sqlCheck expectedResult="1">SELECT COUNT(*) FROM pg_extension WHERE extname = 'vector'</sqlCheck>
+        </preConditions>
+        <sql>
+            CREATE INDEX IF NOT EXISTS idx_document_chunks_embedding
+            ON document_chunks USING hnsw (embedding vector_cosine_ops);
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

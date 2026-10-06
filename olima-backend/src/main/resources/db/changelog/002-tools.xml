@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="002-create-tools" author="olima">
+        <createTable tableName="tools">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="organization_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="type" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="configuration" type="JSONB"/>
+            <column name="enabled" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="requires_confirmation" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="access_level" type="VARCHAR(50)" defaultValue="READ">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP WITH TIME ZONE" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP WITH TIME ZONE" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint baseTableName="tools" baseColumnNames="organization_id"
+                                 referencedTableName="organizations" referencedColumnNames="id"
+                                 constraintName="fk_tools_organization"/>
+
+        <addUniqueConstraint tableName="tools" columnNames="organization_id,name"
+                             constraintName="uk_tools_org_name"/>
+
+        <createIndex tableName="tools" indexName="idx_tools_organization_id">
+            <column name="organization_id"/>
+        </createIndex>
+        <createIndex tableName="tools" indexName="idx_tools_enabled">
+            <column name="enabled"/>
+        </createIndex>
+        <createIndex tableName="tools" indexName="idx_tools_type">
+            <column name="type"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="002-create-tool-parameters" author="olima">
+        <createTable tableName="tool_parameters">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="tool_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="type" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="TEXT"/>
+            <column name="required" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="default_value" type="VARCHAR(500)"/>
+        </createTable>
+
+        <addForeignKeyConstraint baseTableName="tool_parameters" baseColumnNames="tool_id"
+                                 referencedTableName="tools" referencedColumnNames="id"
+                                 constraintName="fk_tool_parameters_tool"
+                                 onDelete="CASCADE"/>
+
+        <addUniqueConstraint tableName="tool_parameters" columnNames="tool_id,name"
+                             constraintName="uk_tool_params_tool_name"/>
+
+        <createIndex tableName="tool_parameters" indexName="idx_tool_parameters_tool_id">
+            <column name="tool_id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

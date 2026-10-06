@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="016-tool-executions-keep-history-on-tool-delete" author="olima">
+        <dropForeignKeyConstraint baseTableName="tool_executions" constraintName="fk_tool_executions_tool"/>
+        <dropNotNullConstraint tableName="tool_executions" columnName="tool_id" columnDataType="UUID"/>
+        <addForeignKeyConstraint baseTableName="tool_executions" baseColumnNames="tool_id"
+                                 referencedTableName="tools" referencedColumnNames="id"
+                                 constraintName="fk_tool_executions_tool"
+                                 onDelete="SET NULL"/>
+    </changeSet>
+
+</databaseChangeLog>

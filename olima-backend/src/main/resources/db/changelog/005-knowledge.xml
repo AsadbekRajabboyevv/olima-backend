@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="005-create-knowledge-bases" author="olima">
+        <createTable tableName="knowledge_bases">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="organization_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="TEXT"/>
+            <column name="created_at" type="TIMESTAMP WITH TIME ZONE" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP WITH TIME ZONE" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint baseTableName="knowledge_bases" baseColumnNames="organization_id"
+                                 referencedTableName="organizations" referencedColumnNames="id"
+                                 constraintName="fk_knowledge_bases_organization"/>
+
+        <createIndex tableName="knowledge_bases" indexName="idx_knowledge_bases_organization_id">
+            <column name="organization_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="005-create-documents" author="olima">
+        <createTable tableName="documents">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="knowledge_base_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="title" type="VARCHAR(500)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="content" type="TEXT"/>
+            <column name="source_url" type="VARCHAR(1000)"/>
+            <column name="created_at" type="TIMESTAMP WITH TIME ZONE" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP WITH TIME ZONE" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint baseTableName="documents" baseColumnNames="knowledge_base_id"
+                                 referencedTableName="knowledge_bases" referencedColumnNames="id"
+                                 constraintName="fk_documents_knowledge_base"
+                                 onDelete="CASCADE"/>
+    </changeSet>
+
+    <changeSet id="005-create-document-chunks" author="olima">
+        <createTable tableName="document_chunks">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="document_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="organization_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="content" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="document_number" type="VARCHAR(100)"/>
+            <column name="article" type="VARCHAR(100)"/>
+            <column name="paragraph" type="VARCHAR(100)"/>
+            <column name="status" type="VARCHAR(50)" defaultValue="ACTIVE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="effective_from" type="DATE"/>
+            <column name="effective_to" type="DATE"/>
+            <column name="version" type="INTEGER" defaultValueNumeric="1"/>
+            <column name="source_url" type="VARCHAR(1000)"/>
+            <column name="created_at" type="TIMESTAMP WITH TIME ZONE" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint baseTableName="document_chunks" baseColumnNames="document_id"
+                                 referencedTableName="documents" referencedColumnNames="id"
+                                 constraintName="fk_document_chunks_document"
+                                 onDelete="CASCADE"/>
+
+        <addForeignKeyConstraint baseTableName="document_chunks" baseColumnNames="organization_id"
+                                 referencedTableName="organizations" referencedColumnNames="id"
+                                 constraintName="fk_document_chunks_organization"/>
+
+        <createIndex tableName="document_chunks" indexName="idx_document_chunks_organization_id">
+            <column name="organization_id"/>
+        </createIndex>
+        <createIndex tableName="document_chunks" indexName="idx_document_chunks_document_id">
+            <column name="document_id"/>
+        </createIndex>
+        <createIndex tableName="document_chunks" indexName="idx_document_chunks_status">
+            <column name="status"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

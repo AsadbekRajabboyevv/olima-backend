@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="008-add-document-upload-columns" author="olima">
+        <addColumn tableName="documents">
+            <column name="file_name" type="VARCHAR(500)"/>
+            <column name="file_type" type="VARCHAR(100)"/>
+            <column name="file_size" type="BIGINT"/>
+            <column name="status" type="VARCHAR(50)" defaultValue="COMPLETED">
+                <constraints nullable="false"/>
+            </column>
+            <column name="error_message" type="TEXT"/>
+        </addColumn>
+
+        <createIndex tableName="documents" indexName="idx_documents_knowledge_base_id">
+            <column name="knowledge_base_id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

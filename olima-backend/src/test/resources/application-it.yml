@@ -1,0 +1,28 @@
+# Integratsiya testlari (Testcontainers). Datasource @ServiceConnection orqali beriladi.
+spring:
+  ai:
+    openai:
+      api-key: test-key-not-used
+
+management:
+  server:
+    # Test bitta portda — alohida management porti kerak emas
+    port: -1
+
+app:
+  security:
+    jwt:
+      secret: integration-test-jwt-secret-0123456789-abcdef
+    encryption-key: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+    refresh:
+      cookie-secure: false
+    cors:
+      allowed-origin-patterns: http://localhost:*
+  knowledge:
+    storage:
+      path: ${java.io.tmpdir}/olima-it-documents
+    ingestion:
+      worker:
+        enabled: false
+  rate-limit:
+    enabled: false

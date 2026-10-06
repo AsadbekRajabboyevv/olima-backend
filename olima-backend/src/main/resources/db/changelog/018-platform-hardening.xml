@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="018-documents-ingestion-queue" author="olima">
+        <addColumn tableName="documents">
+            <column name="storage_key" type="VARCHAR(255)"/>
+            <column name="content_hash" type="VARCHAR(64)"/>
+            <column name="attempts" type="INTEGER" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="processing_started_at" type="TIMESTAMP WITH TIME ZONE"/>
+        </addColumn>
+        <createIndex tableName="documents" indexName="idx_documents_status_created">
+            <column name="status"/>
+            <column name="created_at"/>
+        </createIndex>
+        <createIndex tableName="documents" indexName="idx_documents_kb_content_hash">
+            <column name="knowledge_base_id"/>
+            <column name="content_hash"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="018-document-chunks-fulltext" author="olima" dbms="postgresql">
+        <sql>
+            ALTER TABLE document_chunks ADD COLUMN IF NOT EXISTS search_vector tsvector
+                GENERATED ALWAYS AS (to_tsvector('simple', translate(coalesce(content, ''), 'ʻʼ’‘`', '     '))) STORED;
+            CREATE INDEX IF NOT EXISTS idx_document_chunks_search_vector
+                ON document_chunks USING gin (search_vector);
+        </sql>
+    </changeSet>
+
+    <changeSet id="018-users-token-version" author="olima">
+        <addColumn tableName="users">
+            <column name="token_version" type="INTEGER" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="018-refresh-tokens" author="olima">
+        <createTable tableName="refresh_tokens">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="user_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="token_hash" type="VARCHAR(64)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="expires_at" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="revoked_at" type="TIMESTAMP WITH TIME ZONE"/>
+            <column name="created_ip" type="VARCHAR(64)"/>
+            <column name="user_agent" type="VARCHAR(300)"/>
+            <column name="created_at" type="TIMESTAMP WITH TIME ZONE" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="refresh_tokens" baseColumnNames="user_id"
+                                 referencedTableName="users" referencedColumnNames="id"
+                                 constraintName="fk_refresh_tokens_user" onDelete="CASCADE"/>
+        <createIndex tableName="refresh_tokens" indexName="idx_refresh_tokens_user">
+            <column name="user_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="018-llm-usage" author="olima">
+        <createTable tableName="llm_usage">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="organization_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="conversation_id" type="UUID"/>
+            <column name="channel" type="VARCHAR(30)"/>
+            <column name="model" type="VARCHAR(100)"/>
+            <column name="prompt_tokens" type="INTEGER" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="completion_tokens" type="INTEGER" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP WITH TIME ZONE" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="llm_usage" baseColumnNames="organization_id"
+                                 referencedTableName="organizations" referencedColumnNames="id"
+                                 constraintName="fk_llm_usage_organization" onDelete="CASCADE"/>
+        <createIndex tableName="llm_usage" indexName="idx_llm_usage_org_created">
+            <column name="organization_id"/>
+            <column name="created_at"/>
+        </createIndex>
+        <addColumn tableName="organizations">
+
+            <column name="monthly_token_quota" type="BIGINT"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="018-telegram-hardening" author="olima">
+        <modifyDataType tableName="telegram_bot_configs" columnName="bot_token" newDataType="VARCHAR(600)"/>
+        <addColumn tableName="telegram_bot_configs">
+            <column name="notification_chat_id" type="BIGINT"/>
+        </addColumn>
+        <createTable tableName="telegram_processed_updates">
+            <column name="bot_config_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="update_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="processed_at" type="TIMESTAMP WITH TIME ZONE" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addPrimaryKey tableName="telegram_processed_updates" columnNames="bot_config_id, update_id"
+                       constraintName="pk_telegram_processed_updates"/>
+        <addForeignKeyConstraint baseTableName="telegram_processed_updates" baseColumnNames="bot_config_id"
+                                 referencedTableName="telegram_bot_configs" referencedColumnNames="id"
+                                 constraintName="fk_telegram_processed_updates_config" onDelete="CASCADE"/>
+        <createIndex tableName="telegram_processed_updates" indexName="idx_telegram_processed_updates_at">
+            <column name="processed_at"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="018-pagination-indexes" author="olima" dbms="postgresql">
+        <sql>
+            CREATE INDEX IF NOT EXISTS idx_conversations_org_created ON conversations (organization_id, created_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_tool_executions_org_created ON tool_executions (organization_id, created_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_tool_executions_conversation ON tool_executions (conversation_id);
+            CREATE INDEX IF NOT EXISTS idx_complaints_org_created ON complaints (organization_id, created_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_messages_conversation_created ON messages (conversation_id, created_at DESC);
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>
+

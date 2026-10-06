@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="013-create-telegram-bot-configs" author="olima">
+        <createTable tableName="telegram_bot_configs">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="organization_id" type="UUID">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="bot_token" type="VARCHAR(200)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="bot_username" type="VARCHAR(100)"/>
+            <column name="webhook_secret" type="VARCHAR(64)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="enabled" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP WITH TIME ZONE" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP WITH TIME ZONE" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint baseTableName="telegram_bot_configs" baseColumnNames="organization_id"
+                                  referencedTableName="organizations" referencedColumnNames="id"
+                                  constraintName="fk_telegram_bot_configs_organization"
+                                  onDelete="CASCADE"/>
+
+        <createIndex tableName="telegram_bot_configs" indexName="idx_telegram_bot_configs_webhook_secret">
+            <column name="webhook_secret"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="013-create-telegram-conversations" author="olima">
+        <createTable tableName="telegram_conversations">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="organization_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="telegram_chat_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="conversation_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP WITH TIME ZONE" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP WITH TIME ZONE" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint baseTableName="telegram_conversations" baseColumnNames="organization_id"
+                                  referencedTableName="organizations" referencedColumnNames="id"
+                                  constraintName="fk_telegram_conversations_organization"
+                                  onDelete="CASCADE"/>
+
+        <addForeignKeyConstraint baseTableName="telegram_conversations" baseColumnNames="conversation_id"
+                                  referencedTableName="conversations" referencedColumnNames="id"
+                                  constraintName="fk_telegram_conversations_conversation"
+                                  onDelete="CASCADE"/>
+
+        <addUniqueConstraint tableName="telegram_conversations"
+                              columnNames="organization_id, telegram_chat_id"
+                              constraintName="uk_telegram_conversations_org_chat"/>
+
+        <createIndex tableName="telegram_conversations" indexName="idx_telegram_conversations_org_chat">
+            <column name="organization_id"/>
+            <column name="telegram_chat_id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>
