@@ -99,6 +99,15 @@ app:
   # Telegram webhook manzili shu asosda quriladi: {public-base-url}/api/v1/telegram/webhook/{secret}
   public-base-url: ${PUBLIC_BASE_URL:http://localhost:8080}
 
+  telegram:
+    # Yangi bot qaysi rejimda ulanadi: WEBHOOK yoki LONG_POLLING. SUPER_ADMIN panelda har bot
+    # uchun alohida tanlay oladi; ORG_ADMIN ulagan bot shu rejimda ishlaydi.
+    default-update-mode: ${TELEGRAM_DEFAULT_UPDATE_MODE:WEBHOOK}
+    # Long polling: getUpdates javobni shuncha ushlab turadi (Telegram maks. 50s)
+    polling-timeout: ${TELEGRAM_POLLING_TIMEOUT:30s}
+    # Bazadagi LONG_POLLING botlar bilan ishlab turgan poller'larni solishtirish oralig'i
+    polling-reconcile-interval: ${TELEGRAM_POLLING_RECONCILE_INTERVAL:60s}
+
   security:
     jwt:
       secret: ${JWT_SECRET:}

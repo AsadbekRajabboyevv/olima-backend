@@ -5,6 +5,8 @@ import com.olima.security.crypto.EncryptedStringConverter;
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -38,4 +40,9 @@ public class TelegramBotConfigEntity extends BaseEntity {
 
   @Column(name = "notification_chat_id")
   private Long notificationChatId;
+
+  @Enumerated(EnumType.STRING)
+  @Column(name = "update_mode", nullable = false)
+  @Builder.Default
+  private TelegramUpdateMode updateMode = TelegramUpdateMode.WEBHOOK;
 }

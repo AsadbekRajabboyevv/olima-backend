@@ -10,6 +10,9 @@ public interface TelegramService {
 
   void processWebhookAsync(String webhookSecret, String headerSecret, String rawBody);
 
+  /** Long polling orqali olingan update — {@link TelegramLongPollingManager} chaqiradi. */
+  void processPolledUpdateAsync(UUID botConfigId, JsonNode update);
+
   TelegramBotConfigResponse configureBot(UUID organizationId, TelegramBotConfigRequest request);
 
   TelegramBotConfigResponse getConfig(UUID organizationId);

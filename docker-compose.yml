@@ -61,6 +61,9 @@ services:
       LLM_MAX_CONCURRENT: ${LLM_MAX_CONCURRENT:-20}
       LOG_FORMAT: ${LOG_FORMAT:-ecs}
       API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}
+      # Yangi Telegram bot rejimi (WEBHOOK | LONG_POLLING); SUPER_ADMIN har bot uchun alohida tanlaydi.
+      # LONG_POLLING: olima-api faqat BITTA nusxada ishlashi kerak (aks holda Telegram 409 qaytaradi).
+      TELEGRAM_DEFAULT_UPDATE_MODE: ${TELEGRAM_DEFAULT_UPDATE_MODE:-WEBHOOK}
       JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=70 -Xss512k"
     volumes:
       # Yuklangan hujjatlarning asl nusxalari — qayta indekslash uchun kerak

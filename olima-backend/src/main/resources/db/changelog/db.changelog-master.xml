@@ -22,5 +22,6 @@
     <include file="db/changelog/018-platform-hardening.xml"/>
     <include file="db/changelog/019-integration-connections.xml"/>
     <include file="db/changelog/020-token-billing.xml"/>
+    <include file="db/changelog/021-telegram-update-mode.xml"/>
 
 </databaseChangeLog>

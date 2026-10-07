@@ -9,6 +9,8 @@ import com.olima.agent.dto.ChatResponse;
 import com.olima.common.error.NotFoundException;
 import com.olima.config.AgentExecutorConfig;
 import com.olima.organization.OrganizationService;
+import com.olima.security.model.AuthenticatedUser;
+import com.olima.security.tenant.CurrentUser;
 import com.olima.telegram.client.TelegramClient;
 import com.olima.telegram.config.TelegramProperties;
 import com.olima.telegram.dto.TelegramBotConfigRequest;
@@ -30,7 +32,9 @@ import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
@@ -55,6 +59,7 @@ public class TelegramServiceImpl implements TelegramService {
   private final String publicBaseUrl;
   private final ExecutorService agentExecutor;
   private final ObjectMapper objectMapper;
+  private final ApplicationEventPublisher eventPublisher;
 
   private final LoadingCache<String, ReentrantLock> chatLocks =
       Caffeine.newBuilder().weakValues().build(key -> new ReentrantLock());
@@ -70,7 +75,8 @@ public class TelegramServiceImpl implements TelegramService {
       TelegramProperties properties,
       @Value("${app.public-base-url}") String publicBaseUrl,
       @Qualifier(AgentExecutorConfig.AGENT_EXECUTOR) ExecutorService agentExecutor,
-      ObjectMapper objectMapper) {
+      ObjectMapper objectMapper,
+      ApplicationEventPublisher eventPublisher) {
     this.botConfigRepository = botConfigRepository;
     this.telegramConversationRepository = telegramConversationRepository;
     this.organizationService = organizationService;
@@ -82,6 +88,7 @@ public class TelegramServiceImpl implements TelegramService {
     this.publicBaseUrl = publicBaseUrl;
     this.agentExecutor = agentExecutor;
     this.objectMapper = objectMapper;
+    this.eventPublisher = eventPublisher;
   }
 
   @Override
@@ -91,6 +98,22 @@ public class TelegramServiceImpl implements TelegramService {
           try {
             JsonNode update = objectMapper.readTree(rawBody);
             handleIncomingUpdate(webhookSecret, headerSecret, update);
+          } catch (Exception e) {
+            log.error("Error {} {}", e.getMessage(), ExceptionUtils.getStackTrace(e));
+          }
+        });
+  }
+
+  @Override
+  public void processPolledUpdateAsync(UUID botConfigId, JsonNode update) {
+    agentExecutor.execute(
+        () -> {
+          try {
+            botConfigRepository
+                .findById(botConfigId)
+                .filter(TelegramBotConfigEntity::isEnabled)
+                .filter(c -> c.getUpdateMode() == TelegramUpdateMode.LONG_POLLING)
+                .ifPresent(config -> processUpdate(config, update));
           } catch (Exception e) {
             log.error("Error {} {}", e.getMessage(), ExceptionUtils.getStackTrace(e));
           }
@@ -115,7 +138,9 @@ public class TelegramServiceImpl implements TelegramService {
                     TelegramBotConfigEntity.builder()
                         .organizationId(organizationId)
                         .webhookSecret(generateSecret())
+                        .updateMode(properties.defaultUpdateMode())
                         .build());
+    TelegramUpdateMode updateMode = resolveUpdateMode(config.getUpdateMode(), request.updateMode());
 
     String botToken =
         request.botToken() != null && !request.botToken().isBlank()
@@ -138,15 +163,46 @@ public class TelegramServiceImpl implements TelegramService {
     config.setBotToken(botToken);
     config.setBotUsername(botUsername);
     config.setNotificationChatId(request.notificationChatId());
+    config.setUpdateMode(updateMode);
     config.setEnabled(true);
     config = botConfigRepository.save(config);
 
-    String webhookUrl = buildWebhookUrl(config.getWebhookSecret());
-    telegramClient.setWebhook(botToken, webhookUrl, config.getWebhookSecret());
+    if (updateMode == TelegramUpdateMode.WEBHOOK) {
+      telegramClient.setWebhook(
+          botToken, buildWebhookUrl(config.getWebhookSecret()), config.getWebhookSecret());
+    } else {
+      // Webhook o'rnatilgan bo'lsa Telegram getUpdates'ga 409 qaytaradi
+      telegramClient.deleteWebhook(botToken);
+    }
+    // Poller'lar commit'dan keyin moslanadi (TelegramLongPollingManager)
+    eventPublisher.publishEvent(new TelegramBotConfigChangedEvent(organizationId));
 
-    log.info("Registered Telegram bot @{} for organization {}", botUsername, organizationId);
-    TelegramBotConfigResponse response = toResponse(config, webhookUrl);
+    log.info(
+        "Registered Telegram bot @{} for organization {} ({})",
+        botUsername,
+        organizationId,
+        updateMode);
+    TelegramBotConfigResponse response = toResponse(config);
     return response;
+  }
+
+  /**
+   * Rejimni faqat SUPER_ADMIN o'zgartira oladi. ORG_ADMIN null yoki joriy rejimni yuborsa —
+   * o'zgarishsiz qoladi.
+   */
+  private static TelegramUpdateMode resolveUpdateMode(
+      TelegramUpdateMode current, TelegramUpdateMode requested) {
+    if (requested == null || requested == current) {
+      return current;
+    }
+    boolean superAdmin = CurrentUser.get().map(AuthenticatedUser::isSuperAdmin).orElse(false);
+    if (!superAdmin) {
+      AccessDeniedException e =
+          new AccessDeniedException("Only SUPER_ADMIN can change the Telegram update mode");
+      log.error("Error {} {}", e.getMessage(), ExceptionUtils.getStackTrace(e));
+      throw e;
+    }
+    return requested;
   }
 
   @Override
@@ -155,7 +211,7 @@ public class TelegramServiceImpl implements TelegramService {
     TelegramBotConfigResponse response =
         botConfigRepository
             .findByOrganizationId(organizationId)
-            .map(config -> toResponse(config, buildWebhookUrl(config.getWebhookSecret())))
+            .map(this::toResponse)
             .orElse(null);
     return response;
   }
@@ -185,6 +241,7 @@ public class TelegramServiceImpl implements TelegramService {
           e.getMessage());
     }
     botConfigRepository.delete(config);
+    eventPublisher.publishEvent(new TelegramBotConfigChangedEvent(organizationId));
   }
 
   @Override
@@ -196,16 +253,26 @@ public class TelegramServiceImpl implements TelegramService {
       return;
     }
     TelegramBotConfigEntity config = maybeConfig.get();
+    if (!constantTimeEquals(config.getWebhookSecret(), headerSecret)) {
+      log.warn(
+          "Telegram update rejected: secret token header mismatch (organization {})",
+          config.getOrganizationId());
+      return;
+    }
+    if (config.getUpdateMode() != TelegramUpdateMode.WEBHOOK) {
+      log.warn(
+          "Telegram webhook update ignored: bot is in {} mode (organization {})",
+          config.getUpdateMode(),
+          config.getOrganizationId());
+      return;
+    }
+    processUpdate(config, update);
+  }
+
+  private void processUpdate(TelegramBotConfigEntity config, JsonNode update) {
     String prevOrgId = MDC.get("orgId");
     MDC.put("orgId", config.getOrganizationId().toString());
     try {
-      if (!constantTimeEquals(config.getWebhookSecret(), headerSecret)) {
-        log.warn(
-            "Telegram update rejected: secret token header mismatch (organization {})",
-            config.getOrganizationId());
-        return;
-      }
-
       JsonNode updateId = update.path("update_id");
       if (updateId.isNumber() && !deduplicator.markFirstSeen(config.getId(), updateId.asLong())) {
         log.debug("Duplicate Telegram update {} ignored", updateId.asLong());
@@ -311,7 +378,11 @@ public class TelegramServiceImpl implements TelegramService {
         expected.getBytes(StandardCharsets.UTF_8), actual.getBytes(StandardCharsets.UTF_8));
   }
 
-  private TelegramBotConfigResponse toResponse(TelegramBotConfigEntity config, String webhookUrl) {
+  private TelegramBotConfigResponse toResponse(TelegramBotConfigEntity config) {
+    String webhookUrl =
+        config.getUpdateMode() == TelegramUpdateMode.WEBHOOK
+            ? buildWebhookUrl(config.getWebhookSecret())
+            : null;
     String token = config.getBotToken();
     String masked =
         token != null && token.length() > 10
@@ -323,6 +394,7 @@ public class TelegramServiceImpl implements TelegramService {
         masked,
         webhookUrl,
         config.isEnabled(),
-        config.getNotificationChatId());
+        config.getNotificationChatId(),
+        config.getUpdateMode());
   }
 }

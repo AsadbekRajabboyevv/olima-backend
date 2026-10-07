@@ -1,7 +1,12 @@
 package com.olima.telegram.client;
 
+import com.olima.common.http.HttpClientProperties;
 import com.olima.telegram.config.TelegramProperties;
 import com.olima.telegram.exception.TelegramApiException;
+import com.olima.telegram.exception.TelegramPollingException;
+import java.net.http.HttpClient;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -9,6 +14,7 @@ import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
@@ -18,15 +24,34 @@ import tools.jackson.databind.ObjectMapper;
 @Component
 public class TelegramClient {
 
+  // getUpdates javobni pollingTimeout gacha ushlab turadi — umumiy restClient'ning read-timeout'i
+  // (20s) bunga yetmaydi, shuning uchun long polling o'z client'ida.
+  private static final Duration POLLING_READ_MARGIN = Duration.ofSeconds(15);
+
   private final RestClient restClient;
+  private final RestClient pollingClient;
   private final ObjectMapper objectMapper;
   private final TelegramProperties properties;
 
   public TelegramClient(
-      RestClient restClient, ObjectMapper objectMapper, TelegramProperties properties) {
+      RestClient restClient,
+      ObjectMapper objectMapper,
+      TelegramProperties properties,
+      HttpClientProperties httpProperties) {
     this.restClient = restClient;
     this.objectMapper = objectMapper;
     this.properties = properties;
+    this.pollingClient = buildPollingClient(httpProperties, properties.pollingTimeout());
+  }
+
+  private static RestClient buildPollingClient(HttpClientProperties http, Duration pollTimeout) {
+    HttpClient httpClient = HttpClient.newBuilder().connectTimeout(http.connectTimeout()).build();
+    JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient);
+    factory.setReadTimeout(pollTimeout.plus(POLLING_READ_MARGIN));
+    return RestClient.builder()
+        .requestFactory(factory)
+        .defaultHeader("User-Agent", http.userAgent())
+        .build();
   }
 
   public String getBotUsername(String botToken) {
@@ -52,6 +77,34 @@ public class TelegramClient {
 
   public void deleteWebhook(String botToken) {
     call(botToken, "deleteWebhook", Map.of());
+  }
+
+  /**
+   * Long polling: offset'dan boshlab yangilanishlarni oladi. Yangi xabar bo'lmasa Telegram javobni
+   * pollingTimeout gacha ushlab turadi va bo'sh massiv qaytaradi.
+   *
+   * @throws TelegramPollingException Telegram ok=false qaytarsa (masalan 409 — webhook o'rnatilgan)
+   */
+  public JsonNode getUpdates(String botToken, long offset) {
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("offset", offset);
+    body.put("timeout", properties.pollingTimeout().toSeconds());
+    body.put("allowed_updates", properties.allowedUpdates());
+    String response =
+        pollingClient
+            .post()
+            .uri(methodUrl(botToken, "getUpdates"))
+            .contentType(MediaType.APPLICATION_JSON)
+            .body(body)
+            // 409/401 da ham tanani o'qiymiz — sabab description'da
+            .exchange(
+                (request, res) -> new String(res.getBody().readAllBytes(), StandardCharsets.UTF_8));
+    JsonNode root = objectMapper.readTree(response);
+    if (!root.path("ok").asBoolean(false)) {
+      throw new TelegramPollingException(
+          root.path("error_code").asInt(0), root.path("description").asString());
+    }
+    return root.path("result");
   }
 
   public void sendMessage(String botToken, long chatId, String text) {
@@ -101,8 +154,12 @@ public class TelegramClient {
     return parts;
   }
 
+  private String methodUrl(String botToken, String method) {
+    return properties.apiBaseUrl().replaceAll("/+$", "") + "/bot" + botToken + "/" + method;
+  }
+
   private JsonNode call(String botToken, String method, Object body) {
-    String url = properties.apiBaseUrl().replaceAll("/+$", "") + "/bot" + botToken + "/" + method;
+    String url = methodUrl(botToken, method);
     try {
       String response =
           (body == null)

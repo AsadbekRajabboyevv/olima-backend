@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- Bot yangilanishlarni webhook orqali oladimi yoki long polling (getUpdates) orqalimi.
+         Mavjud botlar avvalgidek WEBHOOK da qoladi. -->
+    <changeSet id="021-telegram-update-mode" author="olima">
+        <addColumn tableName="telegram_bot_configs">
+            <column name="update_mode" type="VARCHAR(20)" defaultValue="WEBHOOK">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+        <sql>
+            ALTER TABLE telegram_bot_configs ADD CONSTRAINT ck_telegram_bot_configs_update_mode
+                CHECK (update_mode IN ('WEBHOOK', 'LONG_POLLING'));
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

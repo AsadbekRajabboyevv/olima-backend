@@ -1,5 +1,6 @@
 package com.olima.telegram.config;
 
+import com.olima.telegram.TelegramUpdateMode;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -17,6 +18,12 @@ public record TelegramProperties(
     @DefaultValue("Markdown") String parseMode,
     @DefaultValue("message") List<String> allowedUpdates,
     @NotNull @DefaultValue("3d") Duration processedUpdateRetention,
+    // Yangi bot qaysi rejimda ulanadi (SUPER_ADMIN boshqasini tanlamasa)
+    @NotNull @DefaultValue("WEBHOOK") TelegramUpdateMode defaultUpdateMode,
+    // getUpdates "timeout" parametri: Telegram javobni shuncha ushlab turadi (maks. 50s)
+    @NotNull @DefaultValue("30s") Duration pollingTimeout,
+    // Xatodan keyin qayta urinishgacha kutish: 1s, 2s, 4s ... shu chegaragacha
+    @NotNull @DefaultValue("30s") Duration pollingMaxBackoff,
     @NotBlank
         @DefaultValue(
             "Assalomu alaykum! Men {org} uchun AI yordamchiman. Savolingizni shu yerga yozing —"
